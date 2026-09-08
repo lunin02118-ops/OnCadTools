@@ -4,6 +4,8 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Remoting.Messaging;
+using System.Runtime.Remoting.Proxies;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -189,6 +191,263 @@ namespace OnCadTools
         string GetVersion();
     }
 
+    // --- Dynamic Proxies for Ribbon Command Translation ---
+    public class CommandGroupProxy : RealProxy
+    {
+        private readonly CommandGroup _target;
+
+        public CommandGroupProxy(CommandGroup target) : base(typeof(CommandGroup))
+        {
+            _target = target;
+        }
+
+        public override IMessage Invoke(IMessage msg)
+        {
+            var call = msg as IMethodCallMessage;
+            if (call == null) return null;
+
+            string methodName = call.MethodName;
+            object[] args = (object[])call.Args.Clone();
+
+            try
+            {
+                if (methodName == "AddCommandItem2")
+                {
+                    if (args.Length >= 9)
+                    {
+                        string oldName = args[0] as string;
+                        string oldHint = args[2] as string;
+                        string oldTip = args[3] as string;
+
+                        if (oldName != null) args[0] = CadDict.Translate(oldName);
+                        if (oldHint != null) args[2] = CadDict.Translate(oldHint);
+                        if (oldTip != null) args[3] = CadDict.Translate(oldTip);
+
+                        CadLogger.Log("AddCommandItem2: [" + oldName + "] -> [" + args[0] + "], ToolTip: [" + args[3] + "]");
+                    }
+                    object res = call.MethodBase.Invoke(_target, args);
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+                else if (methodName == "AddCommandItem")
+                {
+                    if (args.Length >= 8)
+                    {
+                        string oldName = args[0] as string;
+                        string oldHint = args[2] as string;
+                        string oldTip = args[3] as string;
+
+                        if (oldName != null) args[0] = CadDict.Translate(oldName);
+                        if (oldHint != null) args[2] = CadDict.Translate(oldHint);
+                        if (oldTip != null) args[3] = CadDict.Translate(oldTip);
+
+                        CadLogger.Log("AddCommandItem: [" + oldName + "] -> [" + args[0] + "]");
+                    }
+                    object res = call.MethodBase.Invoke(_target, args);
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+                else
+                {
+                    object res = call.MethodBase.Invoke(_target, args);
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+            }
+            catch (Exception ex)
+            {
+                CadLogger.Log("CommandGroupProxy EX in " + methodName + ": " + ex.Message);
+                object res = call.MethodBase.Invoke(_target, call.Args);
+                return new ReturnMessage(res, call.Args, call.Args.Length, call.LogicalCallContext, call);
+            }
+        }
+    }
+
+    public class FlyoutGroupProxy : RealProxy
+    {
+        private readonly FlyoutGroup _target;
+
+        public FlyoutGroupProxy(FlyoutGroup target) : base(typeof(FlyoutGroup))
+        {
+            _target = target;
+        }
+
+        public override IMessage Invoke(IMessage msg)
+        {
+            var call = msg as IMethodCallMessage;
+            if (call == null) return null;
+
+            string methodName = call.MethodName;
+            object[] args = (object[])call.Args.Clone();
+
+            try
+            {
+                if (methodName == "AddCommandItem")
+                {
+                    if (args.Length >= 1 && args[0] is string) args[0] = CadDict.Translate((string)args[0]);
+                    if (args.Length >= 3 && args[2] is string) args[2] = CadDict.Translate((string)args[2]);
+                    if (args.Length >= 4 && args[3] is string) args[3] = CadDict.Translate((string)args[3]);
+                }
+                object res = call.MethodBase.Invoke(_target, args);
+                return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+            }
+            catch (Exception ex)
+            {
+                CadLogger.Log("FlyoutGroupProxy EX in " + methodName + ": " + ex.Message);
+                object res = call.MethodBase.Invoke(_target, call.Args);
+                return new ReturnMessage(res, call.Args, call.Args.Length, call.LogicalCallContext, call);
+            }
+        }
+    }
+
+    public class CommandManagerProxy : RealProxy
+    {
+        private readonly CommandManager _target;
+
+        public CommandManagerProxy(CommandManager target) : base(typeof(CommandManager))
+        {
+            _target = target;
+        }
+
+        public override IMessage Invoke(IMessage msg)
+        {
+            var call = msg as IMethodCallMessage;
+            if (call == null) return null;
+
+            string methodName = call.MethodName;
+            object[] args = (object[])call.Args.Clone();
+
+            try
+            {
+                if (methodName == "CreateCommandGroup2")
+                {
+                    if (args.Length >= 7)
+                    {
+                        string oldTitle = args[1] as string;
+                        string oldTip = args[2] as string;
+                        string oldHint = args[3] as string;
+
+                        if (oldTitle != null) args[1] = CadDict.Translate(oldTitle);
+                        if (oldTip != null) args[2] = CadDict.Translate(oldTip);
+                        if (oldHint != null) args[3] = CadDict.Translate(oldHint);
+
+                        args[5] = true; // IgnorePreviousVersion = true
+
+                        CadLogger.Log("CreateCommandGroup2: [" + oldTitle + "] -> [" + args[1] + "], ToolTip: [" + args[2] + "]");
+                    }
+                    object res = call.MethodBase.Invoke(_target, args);
+                    if (res is CommandGroup)
+                    {
+                        var grpProxy = new CommandGroupProxy((CommandGroup)res);
+                        res = (CommandGroup)grpProxy.GetTransparentProxy();
+                    }
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+                else if (methodName == "CreateCommandGroup")
+                {
+                    if (args.Length >= 4)
+                    {
+                        if (args[1] is string) args[1] = CadDict.Translate((string)args[1]);
+                        if (args[2] is string) args[2] = CadDict.Translate((string)args[2]);
+                        if (args[3] is string) args[3] = CadDict.Translate((string)args[3]);
+                    }
+                    object res = call.MethodBase.Invoke(_target, args);
+                    if (res is CommandGroup)
+                    {
+                        var grpProxy = new CommandGroupProxy((CommandGroup)res);
+                        res = (CommandGroup)grpProxy.GetTransparentProxy();
+                    }
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+                else if (methodName == "AddCommandTab")
+                {
+                    if (args.Length >= 2 && args[1] is string)
+                    {
+                        string oldTab = (string)args[1];
+                        args[1] = CadDict.Translate(oldTab);
+                        CadLogger.Log("AddCommandTab: [" + oldTab + "] -> [" + args[1] + "]");
+                    }
+                    object res = call.MethodBase.Invoke(_target, args);
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+                else if (methodName == "GetCommandTab")
+                {
+                    object res = call.MethodBase.Invoke(_target, args);
+                    if (res == null && args.Length >= 2 && args[1] is string)
+                    {
+                        string trTab = CadDict.Translate((string)args[1]);
+                        if (trTab != (string)args[1])
+                        {
+                            args[1] = trTab;
+                            res = call.MethodBase.Invoke(_target, args);
+                        }
+                    }
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+                else if (methodName == "CreateFlyoutGroup" || methodName == "CreateFlyoutGroup2")
+                {
+                    if (args.Length >= 4)
+                    {
+                        if (args[1] is string) args[1] = CadDict.Translate((string)args[1]);
+                        if (args[2] is string) args[2] = CadDict.Translate((string)args[2]);
+                        if (args[3] is string) args[3] = CadDict.Translate((string)args[3]);
+                    }
+                    object res = call.MethodBase.Invoke(_target, args);
+                    if (res is FlyoutGroup)
+                    {
+                        var flProxy = new FlyoutGroupProxy((FlyoutGroup)res);
+                        res = (FlyoutGroup)flProxy.GetTransparentProxy();
+                    }
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+                else
+                {
+                    object res = call.MethodBase.Invoke(_target, args);
+                    return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+                }
+            }
+            catch (Exception ex)
+            {
+                CadLogger.Log("CommandManagerProxy EX in " + methodName + ": " + ex.Message);
+                object res = call.MethodBase.Invoke(_target, call.Args);
+                return new ReturnMessage(res, call.Args, call.Args.Length, call.LogicalCallContext, call);
+            }
+        }
+    }
+
+    public class SwAppProxy : RealProxy
+    {
+        private readonly SldWorks _target;
+        private readonly CommandManager _wrappedCmdMgr;
+
+        public SwAppProxy(SldWorks target, CommandManager wrappedCmdMgr) : base(typeof(SldWorks))
+        {
+            _target = target;
+            _wrappedCmdMgr = wrappedCmdMgr;
+        }
+
+        public override IMessage Invoke(IMessage msg)
+        {
+            var call = msg as IMethodCallMessage;
+            if (call == null) return null;
+
+            try
+            {
+                if (call.MethodName == "GetCommandManager")
+                {
+                    CadLogger.Log("SwAppProxy.GetCommandManager intercepted -> returning proxy CmdMgr");
+                    return new ReturnMessage(_wrappedCmdMgr, null, 0, call.LogicalCallContext, call);
+                }
+                object[] args = call.Args;
+                object res = call.MethodBase.Invoke(_target, args);
+                return new ReturnMessage(res, args, args.Length, call.LogicalCallContext, call);
+            }
+            catch (Exception ex)
+            {
+                CadLogger.Log("SwAppProxy EX in " + call.MethodName + ": " + ex.Message);
+                object res = call.MethodBase.Invoke(_target, call.Args);
+                return new ReturnMessage(res, call.Args, call.Args.Length, call.LogicalCallContext, call);
+            }
+        }
+    }
+
     [Guid("03412ba8-10f6-4d51-ac38-4937ce7bea5f")]
     [ComVisible(true)]
     [ClassInterface(ClassInterfaceType.None)]
@@ -202,6 +461,13 @@ namespace OnCadTools
         private static object _thisSw = null;
         private static int _cookie = 0;
         private static System.Threading.Timer _watchdogTimer = null;
+
+        // AddCommandMgr detour state
+        private static byte[] _origAddCmdMgrBytes = null;
+        private static byte[] _jmpAddCmdMgrBytes = null;
+        private static IntPtr _pOrigAddCmdMgr = IntPtr.Zero;
+        private static MethodInfo _origAddCmdMgr = null;
+        private static MethodInfo _replAddCmdMgr = null;
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool VirtualProtect(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
@@ -217,6 +483,12 @@ namespace OnCadTools
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetParent(IntPtr hWnd);
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern bool SetWindowText(IntPtr hWnd, string lpString);
@@ -290,7 +562,34 @@ namespace OnCadTools
                 InstallDetour(origCheck, replCheck);
                 CadLogger.Log("Installed activation detour");
 
-                // 2. Language View Detours
+                // 2. AddCommandMgr Detour (Ribbon buttons and tooltips translation)
+                _origAddCmdMgr = tAddin.GetMethod("AddCommandMgr", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                _replAddCmdMgr = typeof(ZZZAddin).GetMethod("AddCommandMgr_Detour", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (_origAddCmdMgr != null && _replAddCmdMgr != null)
+                {
+                    RuntimeHelpers.PrepareMethod(_origAddCmdMgr.MethodHandle);
+                    RuntimeHelpers.PrepareMethod(_replAddCmdMgr.MethodHandle);
+
+                    _pOrigAddCmdMgr = _origAddCmdMgr.MethodHandle.GetFunctionPointer();
+                    IntPtr pRepl = _replAddCmdMgr.MethodHandle.GetFunctionPointer();
+
+                    _origAddCmdMgrBytes = new byte[12];
+                    Marshal.Copy(_pOrigAddCmdMgr, _origAddCmdMgrBytes, 0, 12);
+
+                    _jmpAddCmdMgrBytes = new byte[12];
+                    _jmpAddCmdMgrBytes[0] = 0x48; _jmpAddCmdMgrBytes[1] = 0xB8;
+                    Buffer.BlockCopy(BitConverter.GetBytes(pRepl.ToInt64()), 0, _jmpAddCmdMgrBytes, 2, 8);
+                    _jmpAddCmdMgrBytes[10] = 0xFF; _jmpAddCmdMgrBytes[11] = 0xE0;
+
+                    uint oldProt;
+                    VirtualProtect(_pOrigAddCmdMgr, (UIntPtr)12, 0x40, out oldProt);
+                    Marshal.Copy(_jmpAddCmdMgrBytes, 0, _pOrigAddCmdMgr, 12);
+                    VirtualProtect(_pOrigAddCmdMgr, (UIntPtr)12, oldProt, out oldProt);
+
+                    CadLogger.Log("Installed AddCommandMgr detour");
+                }
+
+                // 3. Language View Detours
                 var tLang = coreAsm.GetType("OnCadTools.language");
                 if (tLang != null)
                 {
@@ -330,6 +629,83 @@ namespace OnCadTools
                 }
             }
             catch { }
+        }
+
+        // --- Detour for AddCommandMgr ---
+        public static void AddCommandMgr_Detour(object addin)
+        {
+            CadLogger.Log("AddCommandMgr_Detour triggered!");
+            try
+            {
+                // 1. Temporarily restore original code bytes of AddCommandMgr
+                uint oldProt;
+                VirtualProtect(_pOrigAddCmdMgr, (UIntPtr)12, 0x40, out oldProt);
+                Marshal.Copy(_origAddCmdMgrBytes, 0, _pOrigAddCmdMgr, 12);
+                VirtualProtect(_pOrigAddCmdMgr, (UIntPtr)12, oldProt, out oldProt);
+
+                Type tAddin = addin.GetType();
+                FieldInfo fCmdMgr = tAddin.GetField("iCmdMgr", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                FieldInfo fSwApp = tAddin.GetField("iSwApp", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+                CommandManager realCmdMgr = fCmdMgr != null ? fCmdMgr.GetValue(addin) as CommandManager : null;
+                SldWorks realSwApp = fSwApp != null ? fSwApp.GetValue(addin) as SldWorks : null;
+
+                CommandManager proxyCmdMgr = null;
+                if (realCmdMgr != null)
+                {
+                    var cmdMgrProxy = new CommandManagerProxy(realCmdMgr);
+                    proxyCmdMgr = (CommandManager)cmdMgrProxy.GetTransparentProxy();
+                    fCmdMgr.SetValue(addin, proxyCmdMgr);
+                    CadLogger.Log("Attached CommandManagerProxy to addin.iCmdMgr");
+                }
+
+                SldWorks proxySwApp = null;
+                if (realSwApp != null && proxyCmdMgr != null)
+                {
+                    var swProxy = new SwAppProxy(realSwApp, proxyCmdMgr);
+                    proxySwApp = (SldWorks)swProxy.GetTransparentProxy();
+                    fSwApp.SetValue(addin, proxySwApp);
+                    CadLogger.Log("Attached SwAppProxy to addin.iSwApp");
+                }
+
+                // 2. Invoke original AddCommandMgr with proxies active
+                try
+                {
+                    _origAddCmdMgr.Invoke(addin, null);
+                    CadLogger.Log("Original AddCommandMgr executed successfully with proxies!");
+                }
+                catch (Exception ex)
+                {
+                    CadLogger.Log("Original AddCommandMgr execution EX: " + (ex.InnerException != null ? ex.InnerException.Message : ex.Message));
+                }
+                finally
+                {
+                    // 3. Restore real COM references
+                    if (realCmdMgr != null && fCmdMgr != null)
+                    {
+                        fCmdMgr.SetValue(addin, realCmdMgr);
+                    }
+                    if (realSwApp != null && fSwApp != null)
+                    {
+                        fSwApp.SetValue(addin, realSwApp);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                CadLogger.Log("AddCommandMgr_Detour EX: " + ex.Message);
+            }
+            finally
+            {
+                // 4. Re-install detour for future calls
+                if (_pOrigAddCmdMgr != IntPtr.Zero && _jmpAddCmdMgrBytes != null)
+                {
+                    uint oldProt;
+                    VirtualProtect(_pOrigAddCmdMgr, (UIntPtr)12, 0x40, out oldProt);
+                    Marshal.Copy(_jmpAddCmdMgrBytes, 0, _pOrigAddCmdMgr, 12);
+                    VirtualProtect(_pOrigAddCmdMgr, (UIntPtr)12, oldProt, out oldProt);
+                }
+            }
         }
 
         // --- Permanent Activation Detour ---
@@ -501,10 +877,36 @@ namespace OnCadTools
             }
         }
 
+        private static bool IsTooltipHwnd(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero) return false;
+            try
+            {
+                var sb = new StringBuilder(64);
+                GetClassName(hWnd, sb, 64);
+                string cls = sb.ToString();
+                if (cls.IndexOf("tooltip", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+
+                IntPtr hParent = GetParent(hWnd);
+                if (hParent != IntPtr.Zero)
+                {
+                    sb.Length = 0;
+                    GetClassName(hParent, sb, 64);
+                    string pcls = sb.ToString();
+                    if (pcls.IndexOf("tooltip", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
         private static void TranslateHwnd(IntPtr hWnd)
         {
             try
             {
+                // NEVER touch tooltip windows via Win32 SetWindowText!
+                if (IsTooltipHwnd(hWnd)) return;
+
                 var sb = new StringBuilder(512);
                 if (GetWindowText(hWnd, sb, 512) > 0)
                 {
@@ -622,13 +1024,51 @@ namespace OnCadTools
                     }
                     catch { }
                 }
-
-
             }
             catch (Exception ex)
             {
                 CadLogger.Log("TranslateCommandManager EX: " + ex.Message);
             }
+        }
+
+        public static void CleanCachedToolbars()
+        {
+            try
+            {
+                string[] contexts = new string[] { "Custom API Toolbars", @"CommandManager\PartContext", @"CommandManager\AssyContext", @"CommandManager\DrawContext" };
+                foreach (string ctx in contexts)
+                {
+                    try
+                    {
+                        string path = @"Software\SolidWorks\SOLIDWORKS 2025\User Interface\" + ctx;
+                        using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(path, true))
+                        {
+                            if (key != null)
+                            {
+                                foreach (string sub in key.GetSubKeyNames())
+                                {
+                                    using (var sk = key.OpenSubKey(sub))
+                                    {
+                                        if (sk != null)
+                                        {
+                                            object mod = sk.GetValue("ModuleName");
+                                            object refN = sk.GetValue("RefName");
+                                            if ((mod != null && mod.ToString().IndexOf("03412BA8-10F6-4D51-AC38-4937CE7BEA5F", StringComparison.OrdinalIgnoreCase) >= 0) ||
+                                                (refN != null && refN.ToString().IndexOf("OnCadTools", StringComparison.OrdinalIgnoreCase) >= 0))
+                                            {
+                                                key.DeleteSubKeyTree(sub, false);
+                                                CadLogger.Log("Cleaned cached registry entry: " + ctx + "\\" + sub);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         private static Button FindButton(Control parent, string keyword)
@@ -755,6 +1195,9 @@ namespace OnCadTools
             string dictPath = Path.Combine(baseDir, @"tools\native_dict.tsv");
             CadDict.Load(dictPath);
 
+            // Clean cached toolbars in registry before startup
+            CleanCachedToolbars();
+
             // Start in-process watchdog
             StartWatchdog();
 
@@ -778,6 +1221,9 @@ namespace OnCadTools
             CadLogger.Log("ConnectToSW called. Cookie: " + cookie);
             _thisSw = ThisSW;
             _cookie = cookie;
+
+            // Clean cached registry toolbars so SolidWorks loads new translated definitions
+            CleanCachedToolbars();
 
             // Start NativeRusifier watchdog in background if present
             try
