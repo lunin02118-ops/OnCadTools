@@ -1388,6 +1388,52 @@ namespace OnCadTools
             }
         }
 
+        private static void EnsureSolidWorksTemplatePaths(object thisSW)
+        {
+            try
+            {
+                ISldWorks swApp = thisSW as ISldWorks;
+                if (swApp == null) return;
+
+                string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                string tplDir = Path.Combine(baseDir, "模板");
+                if (!Directory.Exists(tplDir))
+                {
+                    tplDir = @"D:\Program Files\OnCadTools\模板";
+                }
+                if (!Directory.Exists(tplDir)) return;
+
+                // 7 = swFileLocationsSheetFormat
+                // 6 = swFileLocationsDocumentTemplates
+                // 22 = swFileLocationsBOMTemplates
+                // 34 = swFileLocationsWeldmentCutListTemplates
+                // 33 = swFileLocationsHoleTableTemplates
+                int[] prefs = new int[] { 7, 6, 22, 34, 33 };
+
+                foreach (int pref in prefs)
+                {
+                    try
+                    {
+                        string cur = swApp.GetUserPreferenceStringValue(pref);
+                        if (string.IsNullOrEmpty(cur))
+                        {
+                            swApp.SetUserPreferenceStringValue(pref, tplDir);
+                        }
+                        else if (cur.IndexOf(tplDir, StringComparison.OrdinalIgnoreCase) < 0)
+                        {
+                            swApp.SetUserPreferenceStringValue(pref, tplDir + ";" + cur);
+                        }
+                    }
+                    catch { }
+                }
+                CadLogger.Log("Ensured SolidWorks template search paths in memory: " + tplDir);
+            }
+            catch (Exception ex)
+            {
+                CadLogger.Log("EnsureSolidWorksTemplatePaths EX: " + ex.Message);
+            }
+        }
+
         public bool ConnectToSW(object ThisSW, int cookie)
         {
             CadLogger.Log("ConnectToSW called. Cookie: " + cookie);
@@ -1396,6 +1442,9 @@ namespace OnCadTools
 
             // Clean cached registry toolbars so SolidWorks loads new translated definitions
             CleanCachedToolbars();
+
+            // Ensure SolidWorks finds templates and sheet formats
+            EnsureSolidWorksTemplatePaths(ThisSW);
 
             // Start NativeRusifier watchdog in background if present
             try
