@@ -1,0 +1,17 @@
+# Build and Log Artifacts
+*.log
+wrapper_debug.log
+native_rusify.log
+run_cmd.txt
+*.tmp
+*.temp
+
+# IDE & Editor files
+.vs/
+.idea/
+*.user
+*.suo
+
+# Debug symbols if generated
+*.pdb
+*.obj
