@@ -47,7 +47,12 @@ internal class NativeRusifier
 		"直选-off"
 	};
 
-	private static readonly string[] DataFileMarkers = new string[5] { ".sld", ".sldbomtbt", ".sldholtbt", ".sldwldtbt", ".swp" };
+	private static readonly string[] DataFileMarkers = new string[]
+	{
+		".sld", ".drwdot", ".slddrt", ".prtdot", ".asmdot", ".sldprt", ".sldasm", ".slddrw",
+		".sldbomtbt", ".sldholtbt", ".sldwldtbt", ".sldrevtbt", ".sldfvt", ".sldblk", ".sldmat",
+		".swp", ".ini", ".xls", ".xlsx", ".xlt", ".txt", ".p2m", ".pdf", ".dwg", ".dxf"
+	};
 
 	[DllImport("user32.dll")]
 	private static extern bool EnumWindows(EnumProc cb, IntPtr l);
@@ -124,13 +129,18 @@ internal class NativeRusifier
 		{
 			return false;
 		}
-		if (s.Length >= 3 && s[1] == ':' && s[2] == '\\' && ((s[0] >= 'A' && s[0] <= 'Z') || (s[0] >= 'a' && s[0] <= 'z')))
+		string t = s.Trim();
+		if (t.IndexOf('\\') >= 0 || t.IndexOf('/') >= 0)
+		{
+			return true;
+		}
+		if (t.StartsWith(@"\\") || (t.Length >= 2 && char.IsLetter(t[0]) && t[1] == ':'))
 		{
 			return true;
 		}
 		for (int i = 0; i < DataFileMarkers.Length; i++)
 		{
-			if (s.IndexOf(DataFileMarkers[i], StringComparison.OrdinalIgnoreCase) >= 0)
+			if (t.IndexOf(DataFileMarkers[i], StringComparison.OrdinalIgnoreCase) >= 0)
 			{
 				return true;
 			}

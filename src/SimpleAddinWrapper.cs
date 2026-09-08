@@ -131,9 +131,33 @@ namespace OnCadTools
             }
         }
 
+        private static readonly string[] DataFileMarkers = new string[]
+        {
+            ".sld", ".drwdot", ".slddrt", ".prtdot", ".asmdot", ".sldprt", ".sldasm", ".slddrw",
+            ".sldbomtbt", ".sldholtbt", ".sldwldtbt", ".sldrevtbt", ".sldfvt", ".sldblk", ".sldmat",
+            ".swp", ".ini", ".xls", ".xlsx", ".xlt", ".txt", ".p2m", ".pdf", ".dwg", ".dxf"
+        };
+
+        public static bool LooksLikePathOrFileName(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            string t = s.Trim();
+            if (t.StartsWith(@"\\") || (t.Length >= 2 && char.IsLetter(t[0]) && t[1] == ':')) return true;
+            if (t.Contains(@"\") || t.Contains("/")) return true;
+            for (int i = 0; i < DataFileMarkers.Length; i++)
+            {
+                if (t.IndexOf(DataFileMarkers[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         public static string Translate(string s)
         {
             if (string.IsNullOrEmpty(s)) return s;
+            if (LooksLikePathOrFileName(s)) return s;
             string trimmed = s.Trim();
             string res;
             if (_exact.TryGetValue(trimmed, out res))
@@ -739,16 +763,152 @@ namespace OnCadTools
         public static string Standard3View_Detour(string l) { return IsRu(l) ? "3 стандартных вида" : (IsCn(l) ? "标准3视图" : "Standard 3 View"); }
         public static string DrawingView_Detour(string l) { return IsRu(l) ? "Чертежный вид" : (IsCn(l) ? "工程图" : "Drawing View"); }
 
+        // --- Specialized SmartDrawing Layout Fixer ---
+        private static void AdjustSmartDrawingLayout(Form f)
+        {
+            try
+            {
+                if (f == null || f.IsDisposed) return;
+                
+                if (f.ClientSize.Width < 580)
+                {
+                    f.ClientSize = new System.Drawing.Size(590, 245);
+                }
+
+                // label1 & ComboBox
+                var lbl = f.Controls["label1"];
+                var cbo = f.Controls["TemplatesFileComboBox"] as ComboBox;
+                if (lbl != null) { lbl.Text = "Шаблон:"; lbl.Location = new System.Drawing.Point(10, 14); lbl.Size = new System.Drawing.Size(60, 20); }
+                if (cbo != null) { cbo.Location = new System.Drawing.Point(72, 10); cbo.Size = new System.Drawing.Size(505, 24); }
+
+                // DrawGroupBox
+                var dgb = f.Controls["DrawGroupBox"];
+                if (dgb != null)
+                {
+                    dgb.Text = "Параметры чертежа";
+                    dgb.Location = new System.Drawing.Point(10, 40);
+                    dgb.Size = new System.Drawing.Size(315, 195);
+
+                    var isoChk = dgb.Controls["IsometriCheckBox"];
+                    var lenChk = dgb.Controls["LengthWidthDimCheckBox"];
+                    var ordChk = dgb.Controls["OrdinateDimCheckBox"];
+                    var bndChk = dgb.Controls["SheetMetalBendDimCheckBox"];
+                    var symChk = dgb.Controls["SymmetryDimCheckBox"];
+                    var mbChk = dgb.Controls["MutliBodyAsWholeCheckBox"];
+                    var bomChk = dgb.Controls["InsertBomAndBalloonCheckBox"];
+                    var btnMulti = dgb.Controls["GoToMultiBodyCreateDrawBtn"];
+                    var btnFace = dgb.Controls["SetFixedFaceBtn"];
+
+                    if (isoChk != null) { isoChk.Text = "Изометрия"; isoChk.Location = new System.Drawing.Point(10, 20); isoChk.Size = new System.Drawing.Size(130, 20); }
+                    if (lenChk != null) { lenChk.Text = "Обычные размеры"; lenChk.Location = new System.Drawing.Point(10, 45); lenChk.Size = new System.Drawing.Size(140, 20); }
+                    if (ordChk != null) { ordChk.Text = "Размерные цепи"; ordChk.Location = new System.Drawing.Point(155, 45); ordChk.Size = new System.Drawing.Size(145, 20); }
+                    if (bndChk != null) { bndChk.Text = "Обозначения гибов"; bndChk.Location = new System.Drawing.Point(10, 70); bndChk.Size = new System.Drawing.Size(140, 20); }
+                    if (symChk != null) { symChk.Text = "Базовые размеры"; symChk.Location = new System.Drawing.Point(155, 70); symChk.Size = new System.Drawing.Size(145, 20); }
+                    if (mbChk != null) { mbChk.Text = "Многотельные детали целиком"; mbChk.Location = new System.Drawing.Point(10, 95); mbChk.Size = new System.Drawing.Size(280, 20); }
+                    if (bomChk != null) { bomChk.Text = "Вставить BOM и позиции"; bomChk.Location = new System.Drawing.Point(10, 120); bomChk.Size = new System.Drawing.Size(280, 20); }
+                    if (btnMulti != null) { btnMulti.Text = "Многотелый чертёж"; btnMulti.Location = new System.Drawing.Point(10, 148); btnMulti.Size = new System.Drawing.Size(140, 36); }
+                    if (btnFace != null) { btnFace.Text = "Грань вытягивания"; btnFace.Location = new System.Drawing.Point(155, 148); btnFace.Size = new System.Drawing.Size(150, 36); }
+                }
+
+                // ViewGroupBox
+                var vgb = f.Controls["ViewGroupBox"];
+                if (vgb != null)
+                {
+                    vgb.Text = "Вид";
+                    vgb.Location = new System.Drawing.Point(332, 40);
+                    vgb.Size = new System.Drawing.Size(140, 195);
+
+                    var pUp = vgb.Controls["PageUpBtn"];
+                    var pDown = vgb.Controls["PageDownBtn"];
+                    var maxV = vgb.Controls["MaxModelViewBtn"];
+                    var frt = vgb.Controls["FrontBtn"];
+                    var iso = vgb.Controls["IsometricBtn"];
+
+                    if (pUp != null) { pUp.Text = "◄"; }
+                    if (pDown != null) { pDown.Text = "►"; }
+                    if (maxV != null) { maxV.Text = "В экран"; }
+                    if (frt != null) { frt.Text = "Спереди"; }
+                    if (iso != null) { iso.Text = "Изом."; }
+                }
+
+                // Action Buttons
+                var useFront = f.Controls["UseFrontBtn"];
+                var useCur = f.Controls["UseCurrentBtn"];
+                if (useFront != null)
+                {
+                    useFront.Location = new System.Drawing.Point(480, 45);
+                    useFront.Size = new System.Drawing.Size(100, 88);
+                    useFront.Text = "Создать\r\nпо виду\r\nспереди";
+                }
+                if (useCur != null)
+                {
+                    useCur.Location = new System.Drawing.Point(480, 147);
+                    useCur.Size = new System.Drawing.Size(100, 88);
+                    useCur.Text = "Создать\r\nпо тек.\r\nвиду";
+                }
+            }
+            catch { }
+        }
+
         // --- Comprehensive In-Process UI Translation ---
         public static void TranslateControl(Control c)
         {
             if (c == null) return;
             try
             {
-                if (!string.IsNullOrEmpty(c.Text))
+                if (c is Form && c.GetType().Name == "SmartDrawing")
                 {
-                    string tr = CadDict.Translate(c.Text);
-                    if (tr != c.Text) c.Text = tr;
+                    AdjustSmartDrawingLayout((Form)c);
+                }
+
+                // TextBox protection: NEVER translate paths, filenames, or templates
+                var tb = c as TextBox;
+                if (tb != null)
+                {
+                    if (tb.Name.IndexOf("Template", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        tb.Name.IndexOf("File", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        tb.Name.IndexOf("Path", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        CadDict.LooksLikePathOrFileName(tb.Text))
+                    {
+                        return;
+                    }
+                }
+
+                // ComboBox protection: NEVER translate template paths or filenames
+                var cbo = c as ComboBox;
+                if (cbo != null)
+                {
+                    if (cbo.Name.IndexOf("Template", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        cbo.Name.IndexOf("File", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        cbo.Name.IndexOf("Path", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        CadDict.LooksLikePathOrFileName(cbo.Text))
+                    {
+                        return;
+                    }
+                }
+
+                // Standard control text translation
+                if (!string.IsNullOrEmpty(c.Text) && !(c is TextBox) && !(c is ComboBox))
+                {
+                    if (!CadDict.LooksLikePathOrFileName(c.Text))
+                    {
+                        string tr = CadDict.Translate(c.Text);
+                        if (tr != c.Text) c.Text = tr;
+                    }
+                }
+
+                // Auto-adjust CheckBox / RadioButton width to avoid Russian text overlaps
+                var chk = c as CheckBox;
+                if (chk != null && !chk.AutoSize)
+                {
+                    var pref = chk.GetPreferredSize(new System.Drawing.Size(1000, chk.Height));
+                    if (chk.Width < pref.Width + 8) chk.Width = pref.Width + 8;
+                }
+                var rb = c as RadioButton;
+                if (rb != null && !rb.AutoSize)
+                {
+                    var pref = rb.GetPreferredSize(new System.Drawing.Size(1000, rb.Height));
+                    if (rb.Width < pref.Width + 8) rb.Width = pref.Width + 8;
                 }
 
                 // DataGridView: Columns, Headers, Tooltips, Combos
@@ -757,12 +917,12 @@ namespace OnCadTools
                 {
                     foreach (DataGridViewColumn col in dgv.Columns)
                     {
-                        if (!string.IsNullOrEmpty(col.HeaderText))
+                        if (!string.IsNullOrEmpty(col.HeaderText) && !CadDict.LooksLikePathOrFileName(col.HeaderText))
                         {
                             string tr = CadDict.Translate(col.HeaderText);
                             if (tr != col.HeaderText) col.HeaderText = tr;
                         }
-                        if (!string.IsNullOrEmpty(col.ToolTipText))
+                        if (!string.IsNullOrEmpty(col.ToolTipText) && !CadDict.LooksLikePathOrFileName(col.ToolTipText))
                         {
                             string tr = CadDict.Translate(col.ToolTipText);
                             if (tr != col.ToolTipText) col.ToolTipText = tr;
@@ -774,24 +934,31 @@ namespace OnCadTools
                             {
                                 if (cboCol.Items[i] is string)
                                 {
-                                    string tr = CadDict.Translate((string)cboCol.Items[i]);
-                                    if (tr != (string)cboCol.Items[i]) cboCol.Items[i] = tr;
+                                    string s = (string)cboCol.Items[i];
+                                    if (!CadDict.LooksLikePathOrFileName(s))
+                                    {
+                                        string tr = CadDict.Translate(s);
+                                        if (tr != s) cboCol.Items[i] = tr;
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // ComboBox items
-                var cbo = c as ComboBox;
+                // ComboBox items (for non-template comboboxes)
                 if (cbo != null)
                 {
                     for (int i = 0; i < cbo.Items.Count; i++)
                     {
                         if (cbo.Items[i] is string)
                         {
-                            string tr = CadDict.Translate((string)cbo.Items[i]);
-                            if (tr != (string)cbo.Items[i]) cbo.Items[i] = tr;
+                            string s = (string)cbo.Items[i];
+                            if (!CadDict.LooksLikePathOrFileName(s))
+                            {
+                                string tr = CadDict.Translate(s);
+                                if (tr != s) cbo.Items[i] = tr;
+                            }
                         }
                     }
                 }
@@ -804,8 +971,12 @@ namespace OnCadTools
                     {
                         if (lb.Items[i] is string)
                         {
-                            string tr = CadDict.Translate((string)lb.Items[i]);
-                            if (tr != (string)lb.Items[i]) lb.Items[i] = tr;
+                            string s = (string)lb.Items[i];
+                            if (!CadDict.LooksLikePathOrFileName(s))
+                            {
+                                string tr = CadDict.Translate(s);
+                                if (tr != s) lb.Items[i] = tr;
+                            }
                         }
                     }
                 }
@@ -816,12 +987,12 @@ namespace OnCadTools
                 {
                     foreach (TabPage page in tc.TabPages)
                     {
-                        if (!string.IsNullOrEmpty(page.Text))
+                        if (!string.IsNullOrEmpty(page.Text) && !CadDict.LooksLikePathOrFileName(page.Text))
                         {
                             string tr = CadDict.Translate(page.Text);
                             if (tr != page.Text) page.Text = tr;
                         }
-                        if (!string.IsNullOrEmpty(page.ToolTipText))
+                        if (!string.IsNullOrEmpty(page.ToolTipText) && !CadDict.LooksLikePathOrFileName(page.ToolTipText))
                         {
                             string tr = CadDict.Translate(page.ToolTipText);
                             if (tr != page.ToolTipText) page.ToolTipText = tr;
@@ -911,6 +1082,7 @@ namespace OnCadTools
                 if (GetWindowText(hWnd, sb, 512) > 0)
                 {
                     string cur = sb.ToString();
+                    if (CadDict.LooksLikePathOrFileName(cur)) return;
                     bool hasCjk = false;
                     foreach (char ch in cur)
                     {
